@@ -8,27 +8,28 @@ from .serializers import (UserReadSerializer, UserCreateSerializer,
                           SetPasswordSerializer, TagsReadSerializer,
                           IngredientsReadSerializer, RecipeReadSerializer,
                           SubscribeSerializer, RecipeFavoriteSerializer,
-                          RecipeCreateSerializer,
+                          RecipeCreateUpdateSerializer,
                           RecipeShoppingCartCreateSerializer)
 from rest_framework.permissions import AllowAny
 from .pagination import CustomPaginator
 from rest_framework import mixins, status, filters
 from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
+from .filters import RecipeFilter
+import csv
+from django.http import HttpResponse
 
 
-class UserViewSet(mixins.RetrieveModelMixin,
-                  mixins.ListModelMixin,
-                  mixins.CreateModelMixin,
-                  viewsets.GenericViewSet):
+class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
-    permission_classes = [AllowAny, ]
+    permission_classes = (AllowAny, )
     pagination_class = CustomPaginator
 
     def get_serializer_class(self):
         if self.action in ('list', 'retrieve'):
             return UserReadSerializer
-        return UserCreateSerializer
+        else:
+            return UserCreateSerializer
 
     @action(detail=False, methods=['get'],
             pagination_class=None,
@@ -105,12 +106,14 @@ class RecipeViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny, ]
     pagination_class = CustomPaginator
     filter_backends = [DjangoFilterBackend, ]
+    filterset_class = RecipeFilter
+    http_method_names = ['get', 'post', 'patch', 'delete', 'create']
 
     def get_serializer_class(self):
         if self.action in ('retrieve', 'list'):
             return RecipeReadSerializer
         else:
-            return RecipeCreateSerializer
+            return RecipeCreateUpdateSerializer
 
     @action(detail=True, permission_classes=(IsAuthenticated, ),
             methods=['post', 'delete'])
@@ -132,7 +135,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
                             status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, permission_classes=(IsAuthenticated, ),
-            methods=['post', 'delete'])
+            methods=['post', 'delete'], pagination_class=None)
     def shopping_cart(self, request, **kwargs):
         recipe = get_object_or_404(Recipe, id=kwargs['pk'])
         if request.method == 'POST':
@@ -155,3 +158,20 @@ class RecipeViewSet(viewsets.ModelViewSet):
             return Response(
                 {'detail': 'Рецепт удален из списка покупок'}
             )
+
+    @action(detail=False, permission_classes=(IsAuthenticated, ),
+            methods=['get'])
+    def download_shopping_cart(self, request, **kwargs):
+        shopping_cart = request.user.shopping_user.all()
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="shopping_cart.csv"'
+        writer = csv.writer(response)
+        writer.writerow(['Recipe', 'Ingredient', 'Amount'])
+        for item in shopping_cart:
+            recipe = item.recipe.name
+            ingredients = item.recipe.recipes.all()
+            for ingredient in ingredients:
+                writer.writerow([recipe, ingredient.ingredient.name,
+                                 ingredient.amount])
+
+        return response

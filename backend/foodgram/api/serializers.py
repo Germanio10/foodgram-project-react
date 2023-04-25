@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from recipes.models import (Favorite, ShoppingCart, Tag, Ingredient,
                             RecipeIngredient, Recipe)
 from drf_base64.fields import Base64ImageField
+from django.db import transaction
 
 
 class UserReadSerializer(UserSerializer):
@@ -33,19 +34,12 @@ class UserCreateSerializer(UserCreateSerializer):
                   'first_name', 'last_name',
                   'password')
         extra_kwargs = {
+            'email': {'required': True, 'allow_blank': False},
+            'username': {'required': True, 'allow_blank': False},
             'first_name': {'required': True, 'allow_blank': False},
             'last_name': {'required': True, 'allow_blank': False},
-            'email': {'required': True, 'allow_blank': False},
+            'password': {'required': True, 'allow_blank': False}
         }
-
-    def validate(self, obj):
-        invalid_usernames = ['me', 'set_password',
-                             'subscriptions', 'subscribe']
-        if self.initial_data.get('username') in invalid_usernames:
-            raise serializers.ValidationError(
-                {'username': 'Вы не можете использовать этот username.'}
-            )
-        return obj
 
 
 class SetPasswordSerializer(serializers.Serializer):
@@ -179,23 +173,23 @@ class RecipeFavoriteSerializer(serializers.ModelSerializer):
 
 
 class RecipeIngredientCreateSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField()
 
-    model = RecipeIngredient
-    fields = ('id', 'amount')
+    class Meta:
+        model = RecipeIngredient
+        fields = ('id', 'amount')
 
 
-class RecipeCreateSerializer(serializers.ModelSerializer):
+class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
     ingredients = RecipeIngredientCreateSerializer(many=True)
-    tags = serializers.PrimaryKeyRelatedField(many=True,
-                                              queryset=Tag.objects.all())
+    tags = serializers.PrimaryKeyRelatedField(many=True, queryset=Tag.objects.all())
     image = Base64ImageField()
     author = UserReadSerializer(read_only=True)
     id = serializers.ReadOnlyField()
 
     class Meta:
         model = Recipe
-        fields = ('id', 'ingredients', 'tags', 'image', 'name', 'text',
-                  'cooking_time', 'author')
+        fields = ('id', 'ingredients', 'tags', 'image', 'name', 'text', 'cooking_time', 'author')
         extra_kwargs = {
             'ingredients': {'required': True, 'allow_blank': False},
             'tags': {'required': True, 'allow_blank': False},
@@ -205,52 +199,48 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
             'cooking_time': {'required': True},
         }
 
+    @transaction.atomic
     def create(self, validated_data):
-        tags_data = validated_data.pop('tags')
         ingredients_data = validated_data.pop('ingredients')
-
-        recipe = Recipe.objects.create(author=self.context['request'].user,
-                                       **validated_data)
-
-        recipe.tags.set(tags_data)
+        tags_data = validated_data.pop('tags')
+        author = self.context['request'].user
+        recipe = Recipe.objects.create(**validated_data, author=author)
+        for tag in tags_data:
+            recipe.tags.add(tag)
+        recipe_ingredients = []
         for ingredient_data in ingredients_data:
-            ingredient = Ingredient.objects.get_or_create(
-                **ingredient_data['ingredient'])
-            amount = ingredient_data['amount']
-            RecipeIngredient.objects.create(recipe=recipe,
-                                            ingredient=ingredient,
-                                            amount=amount)
-
+            recipe_ingredients.append(
+                RecipeIngredient(
+                    recipe=recipe,
+                    ingredient_id=ingredient_data['id'],
+                    amount=ingredient_data['amount']
+                )
+            )
+        RecipeIngredient.objects.bulk_create(recipe_ingredients)
         return recipe
 
+    @transaction.atomic
     def update(self, instance, validated_data):
-        tags_data = validated_data.pop('tags', None)
-        ingredients_data = validated_data.pop('ingredients', None)
-
-        if tags_data:
-            instance.tags.set(tags_data)
-
-        if ingredients_data:
-            RecipeIngredient.objects.filter(recipe=instance).delete()
-            for ingredient_data in ingredients_data:
-                ingredient = Ingredient.objects.get_or_create(
-                    **ingredient_data['ingredient'])
-                amount = ingredient_data['amount']
-                RecipeIngredient.objects.create(recipe=instance,
-                                                ingredient=ingredient,
-                                                amount=amount)
-
-        instance.name = validated_data.get('name', instance.name)
-        instance.text = validated_data.get('text', instance.text)
-        instance.cooking_time = validated_data.get('cooking_time',
-                                                   instance.cooking_time)
-
-        if validated_data.get('image'):
-            instance.image.delete(save=False)
-            instance.image = validated_data['image']
-
+        ingredients_data = validated_data.pop('ingredients', [])
+        tags_data = validated_data.pop('tags', [])
+        for key, value in validated_data.items():
+            setattr(instance, key, value)
         instance.save()
+        instance.tags.set(tags_data)
+        RecipeIngredient.objects.filter(recipe=instance).delete()
+        recipe_ingredients = [
+            RecipeIngredient(
+                recipe=instance,
+                ingredient_id=ingredient_data['id'],
+                amount=ingredient_data['amount']
+            ) for ingredient_data in ingredients_data
+        ]
+        RecipeIngredient.objects.bulk_create(recipe_ingredients)
         return instance
+
+    def to_representation(self, instance):
+        return RecipeReadSerializer(instance,
+                                    context=self.context).data
 
 
 class RecipeShoppingCartCreateSerializer(serializers.ModelSerializer):

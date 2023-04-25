@@ -3,20 +3,6 @@ from users.models import User
 from django.core.exceptions import ValidationError
 
 
-class Ingredient(models.Model):
-    name = models.CharField(max_length=200,
-                            verbose_name='Название ингридиента')
-    measurement_unit = models.CharField(max_length=200,
-                                        verbose_name='Единица измерения')
-
-    class Meta:
-        verbose_name = 'Ингредиент'
-        verbose_name_plural = 'Ингридиенты'
-
-    def __str__(self):
-        return self.name
-
-
 class Tag(models.Model):
     name = models.CharField(max_length=200,
                             verbose_name='Название тэга',
@@ -38,6 +24,20 @@ class Tag(models.Model):
         return self.name
 
 
+class Ingredient(models.Model):
+    name = models.CharField(max_length=200,
+                            verbose_name='Название ингридиента')
+    measurement_unit = models.CharField(max_length=200,
+                                        verbose_name='Единица измерения')
+
+    class Meta:
+        verbose_name = 'Ингредиент'
+        verbose_name_plural = 'Ингридиенты'
+
+    def __str__(self):
+        return self.name
+
+
 class Recipe(models.Model):
     ingredients = models.ManyToManyField(
         Ingredient,
@@ -52,7 +52,7 @@ class Recipe(models.Model):
     name = models.CharField(max_length=200,
                             verbose_name='Название')
     text = models.TextField(verbose_name='Текст')
-    cooking_time = models.PositiveIntegerField()
+    cooking_time = models.PositiveSmallIntegerField()
     author = models.ForeignKey(User,
                                on_delete=models.CASCADE,
                                related_name='recipes',
@@ -83,7 +83,7 @@ class RecipeIngredient(models.Model):
                                    on_delete=models.CASCADE,
                                    related_name='ingredietns',
                                    verbose_name='Ингредиент')
-    amount = models.PositiveIntegerField()
+    amount = models.PositiveSmallIntegerField()
 
     class Meta:
         verbose_name = 'Ингредиенты в рецепте'
@@ -123,7 +123,7 @@ class Favorite(models.Model):
         ]
 
     def __str__(self):
-        return f'{self.user.username} - {self.recipe.name}'
+        return f'{self.user}, {self.recipe.name}'
 
 
 class ShoppingCart(models.Model):
@@ -151,4 +151,4 @@ class ShoppingCart(models.Model):
         ]
 
     def __str__(self):
-        return f'{self.user.username} - {self.recipe.name}'
+        return f'{self.user}, {self.recipe.name}'
