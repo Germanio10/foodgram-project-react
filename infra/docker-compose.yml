@@ -9,7 +9,7 @@ services:
       - ./.env
   
   backend:
-    image: backend_diplom:latest
+    image: germanio10/backend_diplom:latest
     restart: always
     volumes:
       - static_value:/app/static/
@@ -20,7 +20,7 @@ services:
       - ./.env
 
   frontend:
-    image: frontend_diplom:latest
+    image: germanio10/frontend_diplom:latest
     volumes:
       - ../frontend/:/app/result_build/
     depends_on:
