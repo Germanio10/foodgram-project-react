@@ -157,6 +157,14 @@ class SubscribeSerializer(serializers.ModelSerializer):
                                             author=obj).exists()
         return False
 
+    def get_recipes(self, obj):
+        recipes_limit = self.context.get('request').query_params.get('recipes_limit')
+        if recipes_limit is not None:
+            recipes = obj.recipes.all()[:int(recipes_limit)]
+        else:
+            recipes = obj.recipes.all()
+        return RecipeSubcribeSerializer(recipes, many=True).data
+
     def get_recipes_count(self, obj):
         author = self.context.get('author')
         if author is not None:
@@ -182,22 +190,15 @@ class RecipeIngredientCreateSerializer(serializers.ModelSerializer):
 
 class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
     ingredients = RecipeIngredientCreateSerializer(many=True)
-    tags = serializers.PrimaryKeyRelatedField(many=True, queryset=Tag.objects.all())
+    tags = serializers.PrimaryKeyRelatedField(many=True,
+                                              queryset=Tag.objects.all())
     image = Base64ImageField()
     author = UserReadSerializer(read_only=True)
-    id = serializers.ReadOnlyField()
 
     class Meta:
         model = Recipe
-        fields = ('id', 'ingredients', 'tags', 'image', 'name', 'text', 'cooking_time', 'author')
-        extra_kwargs = {
-            'ingredients': {'required': True, 'allow_blank': False},
-            'tags': {'required': True, 'allow_blank': False},
-            'image': {'required': True, 'allow_blank': False},
-            'name': {'required': True, 'allow_blank': False},
-            'text': {'required': True, 'allow_blank': False},
-            'cooking_time': {'required': True},
-        }
+        fields = ('id', 'ingredients', 'tags', 'image', 'name', 'text',
+                  'cooking_time', 'author')
 
     @transaction.atomic
     def create(self, validated_data):
@@ -205,8 +206,7 @@ class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
         tags_data = validated_data.pop('tags')
         author = self.context['request'].user
         recipe = Recipe.objects.create(**validated_data, author=author)
-        for tag in tags_data:
-            recipe.tags.add(tag)
+        recipe.tags.set(tags_data)
         recipe_ingredients = []
         for ingredient_data in ingredients_data:
             recipe_ingredients.append(
@@ -223,9 +223,7 @@ class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         ingredients_data = validated_data.pop('ingredients', [])
         tags_data = validated_data.pop('tags', [])
-        for key, value in validated_data.items():
-            setattr(instance, key, value)
-        instance.save()
+        super().update(instance, validated_data)
         instance.tags.set(tags_data)
         RecipeIngredient.objects.filter(recipe=instance).delete()
         recipe_ingredients = [

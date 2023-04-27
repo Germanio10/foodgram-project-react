@@ -1,6 +1,6 @@
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from users.models import User, Subscribe
 from recipes.models import Tag, Ingredient, Recipe, Favorite, ShoppingCart
@@ -18,6 +18,8 @@ from django.shortcuts import get_object_or_404
 from .filters import RecipeFilter
 import csv
 from django.http import HttpResponse
+from .permissions import IsAuthorOrReadOnly
+from django.db.models import Sum
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -109,6 +111,15 @@ class RecipeViewSet(viewsets.ModelViewSet):
     filterset_class = RecipeFilter
     http_method_names = ['get', 'post', 'patch', 'delete', 'create']
 
+    def get_permissions(self):
+        if self.action == 'list':
+            permission_classes = [AllowAny]
+        elif self.action in ['retrieve', 'create']:
+            permission_classes = [IsAuthenticatedOrReadOnly]
+        else:
+            permission_classes = [IsAuthorOrReadOnly]
+        return [permission() for permission in permission_classes]
+
     def get_serializer_class(self):
         if self.action in ('retrieve', 'list'):
             return RecipeReadSerializer
@@ -127,9 +138,14 @@ class RecipeViewSet(viewsets.ModelViewSet):
             serializer = RecipeFavoriteSerializer(recipe, data=request.data,
                                                   context={'request': request})
             serializer.is_valid(raise_exception=True)
-            Favorite.objects.get_or_create(recipe=recipe, user=request.user)
+            Favorite.objects.create(recipe=recipe, user=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         if request.method == 'DELETE':
+            if not Favorite.objects.filter(user=request.user,
+                                           recipe=recipe).exists():
+                return Response(
+                    {"error": "Рецепта нет в избранном"}
+                    )
             Favorite.objects.filter(user=request.user, recipe=recipe).delete()
             return Response({'detail': 'Рецепт удален из избранного'},
                             status=status.HTTP_204_NO_CONTENT)
@@ -148,11 +164,16 @@ class RecipeViewSet(viewsets.ModelViewSet):
                                                             context={'request':
                                                                      request})
             serializer.is_valid(raise_exception=True)
-            ShoppingCart.objects.get_or_create(recipe=recipe, 
-                                               user=request.user)
+            ShoppingCart.objects.create(recipe=recipe,
+                                        user=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         if request.method == 'DELETE':
+            if not ShoppingCart.objects.filter(recipe=recipe,
+                                               user=request.user).exists():
+                return Response(
+                    {"error": "Рецепта нет в списках покупок"}
+                )
             ShoppingCart.objects.filter(recipe=recipe,
                                         user=request.user).delete()
             return Response(
@@ -162,16 +183,18 @@ class RecipeViewSet(viewsets.ModelViewSet):
     @action(detail=False, permission_classes=(IsAuthenticated, ),
             methods=['get'])
     def download_shopping_cart(self, request, **kwargs):
-        shopping_cart = request.user.shopping_user.all()
+        shopping_cart = (
+            request.user.shopping_user
+            .values('recipe__name', 'recipe__recipes__ingredient__name')
+            .annotate(amount=Sum('recipe__recipes__amount'))
+        )
+
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="shopping_cart.csv"'
         writer = csv.writer(response)
         writer.writerow(['Recipe', 'Ingredient', 'Amount'])
+
         for item in shopping_cart:
-            recipe = item.recipe.name
-            ingredients = item.recipe.recipes.all()
-            for ingredient in ingredients:
-                writer.writerow([recipe, ingredient.ingredient.name,
-                                 ingredient.amount])
+            writer.writerow([item['recipe__name'], item['recipe__recipes__ingredient__name'], item['amount']])
 
         return response

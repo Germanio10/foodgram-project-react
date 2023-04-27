@@ -1,6 +1,7 @@
 from django.db import models
 from users.models import User
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 
 
 class Tag(models.Model):
@@ -47,12 +48,13 @@ class Recipe(models.Model):
     tags = models.ManyToManyField(Tag,
                                   verbose_name='Тэги')
     image = models.ImageField(verbose_name='Картинка',
-                              upload_to='images/',
-                              blank=True)
+                              upload_to='images/')
     name = models.CharField(max_length=200,
                             verbose_name='Название')
     text = models.TextField(verbose_name='Текст')
-    cooking_time = models.PositiveSmallIntegerField()
+    cooking_time = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1)]
+    )
     author = models.ForeignKey(User,
                                on_delete=models.CASCADE,
                                related_name='recipes',
@@ -65,11 +67,6 @@ class Recipe(models.Model):
         verbose_name = 'Рецепт'
         verbose_name_plural = 'Рецепты'
 
-    def validate_unique(self, *args, **kwargs):
-        super().validate_unique(*args, **kwargs)
-        if self.cooking_time < 1:
-            raise ValidationError('Значение должно быть больше или равно 1')
-
     def __str__(self):
         return self.name
 
@@ -81,18 +78,15 @@ class RecipeIngredient(models.Model):
                                verbose_name='Рецепт')
     ingredient = models.ForeignKey(Ingredient,
                                    on_delete=models.CASCADE,
-                                   related_name='ingredietns',
+                                   related_name='ingredients',
                                    verbose_name='Ингредиент')
-    amount = models.PositiveSmallIntegerField()
+    amount = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1)]
+    )
 
     class Meta:
         verbose_name = 'Ингредиенты в рецепте'
         verbose_name_plural = 'Ингредиенты в рецептах'
-
-    def validate_unique(self, *args, **kwargs):
-        super().validate_unique(*args, **kwargs)
-        if self.amount < 1:
-            raise ValidationError('Значение должно быть больше или равно 1')
 
     def __str__(self):
         return f'{self.recipe}, {self.ingredient}, {self.amount}'
