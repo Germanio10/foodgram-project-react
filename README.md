@@ -15,14 +15,16 @@
 ### Развертывание на локальном сервере
 
 1. Установите на сервере docker и docker-compose.
-2. Создайте файл `/infra/.env`. Шаблон для заполнения файла находится в `/infra/.env.example`.
+2. Создайте файл `/infra/.env`.
 3. Выполните команду `docker-compose up -d --buld`.
 4. Выполните миграции `docker-compose exec backend python manage.py migrate`.
 5. Создайте суперюзера `docker-compose exec backend python manage.py createsuperuser`.
 6. Соберите статику `docker-compose exec backend python manage.py collectstatic --no-input`.
-7. Заполните базу ингредиентами `docker-compose exec backend python manage.py load_ingredients`.
+7. Заполните базу ингредиентами `docker-compose exec backend python manage.py upload_ingredients`.
 8. Для корректного создания рецепта через фронт, надо создать пару тегов в базе через админку.
 
+
+ip сервера: 51.250.69.177
 ## Автор
 
 German Chaley
