@@ -18,7 +18,7 @@ from django.shortcuts import get_object_or_404
 from .filters import RecipeFilter
 import csv
 from django.http import HttpResponse
-from .permissions import IsAuthorOrReadOnly
+from .permissions import IsAllowOrAuthorOrAuthorized
 from django.db.models import Sum
 
 
@@ -83,18 +83,14 @@ class UserViewSet(viewsets.ModelViewSet):
         return self.get_paginated_response(serializer.data)
 
 
-class TagsViewSet(mixins.ListModelMixin,
-                  mixins.RetrieveModelMixin,
-                  viewsets.GenericViewSet):
+class TagsViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagsReadSerializer
     permission_classes = [AllowAny, ]
     pagination_class = None
 
 
-class IngredientViewSet(mixins.ListModelMixin,
-                        mixins.RetrieveModelMixin,
-                        viewsets.GenericViewSet):
+class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Ingredient.objects.all()
     serializer_class = IngredientsReadSerializer
     permission_classes = [AllowAny, ]
@@ -105,20 +101,11 @@ class IngredientViewSet(mixins.ListModelMixin,
 
 class RecipeViewSet(viewsets.ModelViewSet):
     queryset = Recipe.objects.all()
-    permission_classes = [AllowAny, ]
+    permission_classes = [IsAllowOrAuthorOrAuthorized, ]
     pagination_class = CustomPaginator
     filter_backends = [DjangoFilterBackend, ]
     filterset_class = RecipeFilter
     http_method_names = ['get', 'post', 'patch', 'delete', 'create']
-
-    def get_permissions(self):
-        if self.action == 'list':
-            permission_classes = [AllowAny]
-        elif self.action in ['retrieve', 'create']:
-            permission_classes = [IsAuthenticatedOrReadOnly]
-        else:
-            permission_classes = [IsAuthorOrReadOnly]
-        return [permission() for permission in permission_classes]
 
     def get_serializer_class(self):
         if self.action in ('retrieve', 'list'):

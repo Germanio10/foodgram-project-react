@@ -181,7 +181,7 @@ class RecipeFavoriteSerializer(serializers.ModelSerializer):
 
 
 class RecipeIngredientCreateSerializer(serializers.ModelSerializer):
-    id = serializers.IntegerField()
+    id = serializers.PrimaryKeyRelatedField(queryset=Ingredient.objects.all().values_list('id', flat=True))
 
     class Meta:
         model = RecipeIngredient
@@ -199,6 +199,11 @@ class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
         model = Recipe
         fields = ('id', 'ingredients', 'tags', 'image', 'name', 'text',
                   'cooking_time', 'author')
+
+    def validate(self, data):
+        if not data.get('ingredients'):
+            raise serializers.ValidationError('Должен быть хотя бы один ингредиент')
+        return data
 
     @transaction.atomic
     def create(self, validated_data):
