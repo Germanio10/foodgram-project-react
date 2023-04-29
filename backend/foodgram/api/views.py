@@ -174,6 +174,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
             request.user.shopping_user
             .values('recipe__name', 'recipe__recipes__ingredient__name')
             .annotate(amount=Sum('recipe__recipes__amount'))
+            .order_by('recipe__recipes__ingredient__name')
         )
 
         response = HttpResponse(content_type='text/csv')
