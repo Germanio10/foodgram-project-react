@@ -181,7 +181,7 @@ class RecipeFavoriteSerializer(serializers.ModelSerializer):
 
 
 class RecipeIngredientCreateSerializer(serializers.ModelSerializer):
-    id = serializers.PrimaryKeyRelatedField(queryset=Ingredient.objects.all().values_list('id', flat=True))
+    id = serializers.PrimaryKeyRelatedField(queryset=Ingredient.objects.all())
 
     class Meta:
         model = RecipeIngredient
@@ -217,7 +217,7 @@ class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
             recipe_ingredients.append(
                 RecipeIngredient(
                     recipe=recipe,
-                    ingredient_id=ingredient_data['id'],
+                    ingredient=ingredient_data['id'],
                     amount=ingredient_data['amount']
                 )
             )
@@ -234,7 +234,7 @@ class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
         recipe_ingredients = [
             RecipeIngredient(
                 recipe=instance,
-                ingredient_id=ingredient_data['id'],
+                ingredient=ingredient_data['id'],
                 amount=ingredient_data['amount']
             ) for ingredient_data in ingredients_data
         ]
