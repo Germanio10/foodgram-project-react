@@ -172,7 +172,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
     def download_shopping_cart(self, request, **kwargs):
         shopping_cart = (
             request.user.shopping_user
-            .values('recipe__name', 'recipe__recipes__ingredient__name')
+            .values('recipe__recipes__ingredient__name')
             .annotate(amount=Sum('recipe__recipes__amount'))
             .order_by('recipe__recipes__ingredient__name')
         )
@@ -180,9 +180,9 @@ class RecipeViewSet(viewsets.ModelViewSet):
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="shopping_cart.csv"'
         writer = csv.writer(response)
-        writer.writerow(['Recipe', 'Ingredient', 'Amount'])
+        writer.writerow(['Ingredient', 'Amount'])
 
         for item in shopping_cart:
-            writer.writerow([item['recipe__name'], item['recipe__recipes__ingredient__name'], item['amount']])
+            writer.writerow([item['recipe__recipes__ingredient__name'], item['amount']])
 
         return response
